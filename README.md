@@ -56,6 +56,21 @@ It can analyze data based on fields such as:
 
 The exact column names can be adjusted inside the application logic if needed.
 
+## Sample Data
+
+The repository includes a dummy dataset for demonstration purposes. No real customer or production data are included.
+
+## How It Works
+
+The user imports an Excel file containing historical quality-control measurements.
+
+After selecting the search field, product code, measurement column, and current value, the application filters the relevant historical data and calculates SPC statistics.
+
+The tool then generates I-MR charts, EWMA monitoring charts, distribution plots, process capability metrics, and customer-based summaries.
+
+The current measurement is compared against historical performance, control limits, and specification limits to support quality-control evaluation.
+
+
 ## Specification Limits
 
 By default, the application automatically creates provisional specification limits:
@@ -68,6 +83,7 @@ These default limits are only used as configurable demonstration values.
 They do not represent any official standard, ISO requirement, customer specification, or regulatory limit.
 
 Users can manually adjust LSL and USL according to the actual product specifications and quality requirements.
+
 
 ## Screenshots
 
@@ -92,6 +108,14 @@ Users can manually adjust LSL and USL according to the actual product specificat
 This project was developed with the assistance of AI coding tools for code generation, debugging, and refactoring.
 
 The SPC methodology, quality-control requirements, calculations, business logic, and application structure were defined, reviewed, and tested by the author.
+
+## Custom Evaluation Metrics
+
+In addition to standard SPC and capability metrics, the application includes custom support indicators such as safety ratio, p-safe score, min ratio, and p-min score.
+
+These indicators are experimental engineering-support metrics designed to compare the current mean value against the lower specification limit and the lowest historical value.
+
+They are not official SPC or ISO-standard metrics and should be used only as additional decision-support information together with Cp, Cpk, control limits, customer specifications, and engineering judgment.
 
 ## Future Improvements
 
