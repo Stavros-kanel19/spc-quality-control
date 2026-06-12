@@ -47,3 +47,16 @@ This project was developed with the assistance of AI coding tools for code gener
 - PDF Reports
 - Database Integration
 - Power BI Connectivity
+## Screenshots
+
+### I Chart
+![I Chart](images/Git_SPC1.png)
+
+### MR & EWMA
+![MR & EWMA](images/Git_SPC2.png)
+
+### Material Analysis
+![Material Analysis](images/Git_SPC3.png)
+
+### Process Capability
+![Process Capability](images/Git_SPC4.png)
