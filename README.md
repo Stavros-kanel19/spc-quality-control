@@ -58,7 +58,11 @@ The exact column names can be adjusted inside the application logic if needed.
 
 ## Sample Data
 
-The repository includes a dummy dataset for demonstration purposes. No real customer or production data are included.
+The repository includes a dummy Excel dataset for demonstration purposes:
+
+`Dummy_Data.xlsx`
+
+No real customer or production data are included.
 
 ## How It Works
 
