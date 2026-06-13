@@ -2,7 +2,7 @@
 
 A desktop Python application for Statistical Process Control (SPC) and quality analysis.
 
-This project was created to support quality-control work by analyzing historical production data, comparing current measurements with past performance, and visualizing process behavior through SPC charts and statistical summaries.
+This project was created to support quality control work by analyzing historical production data, comparing current measurements with past performance, and visualizing process behavior through SPC charts and statistical summaries.
 
 ## Features
 
@@ -10,10 +10,11 @@ This project was created to support quality-control work by analyzing historical
 * Moving Range Monitoring
 * EWMA Monitoring
 * Process Capability Analysis (Cp, Cpk)
-* Customer-Based Statistics
+* Customer based Statistics
 * Historical Trend Analysis
 * Outlier Exclusion
-* Material-Type Analysis
+* Normality validation
+* Material Type Analysis
 * Boxplot Visualization
 * Excel Import Support
 
@@ -66,13 +67,13 @@ No real customer or production data are included.
 
 ## How It Works
 
-The user imports an Excel file containing historical quality-control measurements.
+The user imports an Excel file containing historical quality control measurements.
 
 After selecting the search field, product code, measurement column, and current value, the application filters the relevant historical data and calculates SPC statistics.
 
-The tool then generates I-MR charts, EWMA monitoring charts, distribution plots, process capability metrics, and customer-based summaries.
+The tool then generates I-MR charts, EWMA monitoring charts, distribution plots, process capability metrics, and customer based summaries.
 
-The current measurement is compared against historical performance, control limits, and specification limits to support quality-control evaluation.
+The current measurement is compared against historical performance, control limits, and specification limits to support quality control evaluation.
 
 
 ## Specification Limits
@@ -125,20 +126,35 @@ These indicators are experimental engineering-support metrics designed to compar
 
 They are not official SPC or ISO-standard metrics and should be used only as additional decision-support information together with Cp, Cpk, control limits, customer specifications, and engineering judgment.
 
+## Statistical Assumptions
+
+The normal distribution view is used as an approximate model for visualizing process behavior and estimating capability metrics such as Cp and Cpk.
+
+Normality is checked with a Shapiro-Wilk test, supported by a Q-Q plot and histogram with normal fit. If the data do not appear approximately normal, capability results should be interpreted with caution.
+
+The diagnostics tab also includes deviation analysis, lag-1 correlation, and a runs test to support the evaluation of independence and possible non-random patterns.
+
+These checks are intended to support engineering judgment and should not replace official product specifications, customer requirements, or validated quality procedures.
+
 ## Future Improvements
 
 * Nelson Rules
-* Western Electric Rules
 * Xbar-R Charts
 * p / np / c / u Charts
 * PDF Report Export
 * Database Integration
-* Power BI Connectivity
+  
+## Project Scope
+
+This project was created as a personal learning and engineering support exercise.
+
+The goal was to explore how Python can be used to analyze quality control data, generate SPC charts, calculate basic capability metrics, and support the interpretation of historical measurements.
+
+It is not intended to represent an official company system, certified SPC software, or a validated production control tool. 
 
 ## Disclaimer
 
-This application is intended as an educational and engineering-support tool.
+The included dataset is dummy data and does not contain real customer or production information. 
 
-Quality decisions should always be verified against official product specifications, customer requirements, internal quality procedures, and engineering judgment.
-
+Any quality related decision should always be verified against official product specifications, customer requirements, internal quality procedures, and engineering judgment.
 
