@@ -1,12 +1,13 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-
+import os
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from scipy import stats as scipy_stats
+
 
 
 D2_MOVING_RANGE_2 = 1.128
@@ -25,6 +26,7 @@ class QualityControlApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Quality Control Application")
+        self.set_window_icon()
         self.root.geometry("1420x920")
         self.root.minsize(1180, 780)
 
@@ -38,6 +40,7 @@ class QualityControlApp:
         self.dist_canvas = None
         self.recent_canvas = None
         self.normal_canvas = None
+        self.diagnostics_canvas = None
 
         self.last_model = None
         self.last_measure_col = None
@@ -53,10 +56,19 @@ class QualityControlApp:
 
         self.use_recent_distribution = tk.BooleanVar(value=False)
         self.use_recent_normal = tk.BooleanVar(value=False)
+        self.use_recent_diagnostics = tk.BooleanVar(value=False)
         self.use_recent_data = tk.BooleanVar(value=False)
         self.use_recent_customer = tk.BooleanVar(value=False)
 
         self.create_widgets()
+
+    def set_window_icon(self):
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        icon_path = os.path.join(base_dir, "SPC.png")
+
+        if os.path.exists(icon_path):
+            self.app_icon = tk.PhotoImage(file=icon_path)
+            self.root.iconphoto(True, self.app_icon)
 
     def create_widgets(self):
         file_frame = tk.Frame(self.root, pady=10)
@@ -146,20 +158,23 @@ class QualityControlApp:
         self.tab_mr_ewma = ttk.Frame(self.notebook)
         self.tab_distributions = ttk.Frame(self.notebook)
         self.tab_normal = ttk.Frame(self.notebook)
+        self.tab_diagnostics = ttk.Frame(self.notebook)
         self.tab_recent = ttk.Frame(self.notebook)
         self.tab_data = ttk.Frame(self.notebook)
         self.tab_customer = ttk.Frame(self.notebook)
 
-        self.notebook.add(self.tab_i_chart, text="I graph")
+        self.notebook.add(self.tab_i_chart, text="I Graph")
         self.notebook.add(self.tab_mr_ewma, text="MR & EWMA")
         self.notebook.add(self.tab_distributions, text="Material_Type & Boxplot")
         self.notebook.add(self.tab_normal, text="Normal Distribution")
+        self.notebook.add(self.tab_diagnostics, text="Assumptions & Diagnostics")
         self.notebook.add(self.tab_recent, text="Last N")
         self.notebook.add(self.tab_data, text="Statistics")
         self.notebook.add(self.tab_customer, text="Statistics per Customer")
 
         self.build_distribution_tab()
         self.build_normal_tab()
+        self.build_diagnostics_tab()
         self.build_data_tab()
         self.build_customer_tab()
 
@@ -260,6 +275,42 @@ class QualityControlApp:
             pady=10,
         )
         self.lbl_min_ratio.grid(row=2, column=0, sticky="nsew")
+
+    def build_diagnostics_tab(self):
+        top = tk.Frame(self.tab_diagnostics)
+        top.pack(fill=tk.X, padx=10, pady=8)
+
+        tk.Checkbutton(
+            top,
+            text="Use last N",
+            variable=self.use_recent_diagnostics,
+            command=self.redraw_diagnostics_charts,
+        ).pack(side=tk.LEFT, padx=10)
+
+        tk.Button(top, text="Refresh", command=self.redraw_diagnostics_charts).pack(side=tk.LEFT, padx=8)
+
+        body = tk.Frame(self.tab_diagnostics)
+        body.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+        body.columnconfigure(0, weight=2)
+        body.columnconfigure(1, weight=1)
+        body.rowconfigure(0, weight=1)
+
+        self.diagnostics_plot_frame = tk.Frame(body)
+        self.diagnostics_plot_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+
+        self.lbl_diagnostics_summary = tk.Label(
+            body,
+            text="After analysis diagnostics will show up.",
+            justify=tk.LEFT,
+            anchor=tk.NW,
+            font=("Consolas", 9),
+            bg="#f4f6f8",
+            relief="sunken",
+            padx=10,
+            pady=10,
+            wraplength=620,
+        )
+        self.lbl_diagnostics_summary.grid(row=0, column=1, sticky="nsew")
 
     def build_data_tab(self):
         self.tab_data.columnconfigure(0, weight=3)
@@ -731,6 +782,74 @@ class QualityControlApp:
             "sigma_ci_high": sigma_ci_high,
         }
 
+    def normality_test(self, series):
+        values = pd.to_numeric(series, errors="coerce").dropna().astype(float)
+        n = int(values.count())
+        if n < 3:
+            return {
+                "test_name": "Shapiro-Wilk",
+                "statistic": None,
+                "p_value": None,
+                "n_tested": n,
+                "warning": False,
+                "note": "At least 3 values are required.",
+            }
+
+        test_values = values
+        note = ""
+        if n > 5000:
+            test_values = values.sample(n=5000, random_state=42)
+            note = "Test run on a fixed sample of 5000 values."
+
+        result = scipy_stats.shapiro(test_values)
+        p_value = float(result.pvalue)
+        return {
+            "test_name": "Shapiro-Wilk",
+            "statistic": float(result.statistic),
+            "p_value": p_value,
+            "n_tested": int(test_values.count()),
+            "warning": p_value < 0.05,
+            "note": note,
+        }
+
+    def normality_decision(self, normality):
+        p_value = normality["p_value"]
+        if p_value is None:
+            return {
+                "accepted": False,
+                "status": "[X]",
+                "curve_text": "Normality cannot be evaluated.",
+                "summary_text": "Normality cannot be evaluated.",
+                "color": "#555555",
+            }
+        if p_value < 0.05:
+            warning = (
+                "Normality warning: data may not follow a normal distribution.\n"
+                "Capability results should be interpreted with caution."
+            )
+            return {
+                "accepted": False,
+                "status": "[X]",
+                "curve_text": warning,
+                "summary_text": warning,
+                "color": "#c62828",
+            }
+        if p_value <= 0.20:
+            return {
+                "accepted": True,
+                "status": "[OK]",
+                "curve_text": "Normality borderline accepted.",
+                "summary_text": "Normality borderline accepted.",
+                "color": "#ef6c00",
+            }
+        return {
+            "accepted": True,
+            "status": "[OK]",
+            "curve_text": "Normality OK.",
+            "summary_text": "No strong evidence against normality.",
+            "color": "#2e7d32",
+        }
+
     def lower_limit_safety_score(self, current_value, lower_limit, sigma_ref, historical_mean, z_required=2.85, lower_label="LSL"):
         denominator = historical_mean - lower_limit
         safety_ratio = float((current_value - lower_limit) / denominator) if denominator > 0 else None
@@ -854,6 +973,9 @@ class QualityControlApp:
 
         self.draw_distribution_charts(distribution_model, measure_col)
         self.draw_normal_chart(normal_model, measure_col, normal_stats, lsl, usl)
+        diagnostics_model = self.model_for_scope(model, self.use_recent_diagnostics.get())
+        diagnostics_stats = self.calculate_stats(diagnostics_model[measure_col], new_value, ewma_lambda)
+        self.draw_diagnostics_charts(diagnostics_model, measure_col, diagnostics_stats)
         self.draw_recent_chart(model, search_col, measure_col, code, new_value, stats, recent_n)
         self.update_history(data_model, search_col, measure_col, code, data_stats)
         self.update_stats_text(search_col, measure_col, code, new_value, data_stats, filter_text, removed_count, recent_n, data_model)
@@ -925,6 +1047,165 @@ class QualityControlApp:
     def clear_frame(self, frame):
         for child in frame.winfo_children():
             child.destroy()
+
+    def runs_test(self, series):
+        values = pd.to_numeric(series, errors="coerce").dropna().astype(float)
+        if len(values) < 3:
+            return {"p_value": None, "z": None, "runs": None, "ok": False, "comment": "At least 3 values are required."}
+
+        centered = values - values.mean()
+        signs = [1 if value > 0 else -1 for value in centered if value != 0]
+        n_pos = signs.count(1)
+        n_neg = signs.count(-1)
+        if n_pos == 0 or n_neg == 0:
+            return {"p_value": None, "z": None, "runs": 1, "ok": False, "comment": "Values are mostly on one side of the mean."}
+
+        runs = 1 + sum(1 for idx in range(1, len(signs)) if signs[idx] != signs[idx - 1])
+        expected = 1 + (2 * n_pos * n_neg) / (n_pos + n_neg)
+        variance = (
+            (2 * n_pos * n_neg * (2 * n_pos * n_neg - n_pos - n_neg))
+            / (((n_pos + n_neg) ** 2) * (n_pos + n_neg - 1))
+        )
+        if variance <= 0:
+            return {"p_value": None, "z": None, "runs": runs, "ok": False, "comment": "Runs variance could not be calculated."}
+
+        z_value = (runs - expected) / (variance ** 0.5)
+        p_value = 2 * (1 - scipy_stats.norm.cdf(abs(z_value)))
+        ok = bool(p_value >= 0.05)
+        comment = "No strong non-random pattern detected." if ok else "Possible non-random sequence pattern."
+        return {"p_value": float(p_value), "z": float(z_value), "runs": int(runs), "ok": ok, "comment": comment}
+
+    def diagnostics_results(self, values):
+        values = pd.to_numeric(values, errors="coerce").dropna().astype(float)
+        normality = self.normality_test(values)
+        residuals = values - values.mean()
+        sigma = float(values.std(ddof=1)) if len(values) > 1 else 0.0
+        residual_bias = abs(float(residuals.mean()))
+        residual_ok = bool(sigma and residual_bias <= 0.10 * sigma)
+        if len(values) > 1 and values.std(ddof=1):
+            lag_corr = float(values.autocorr(lag=1))
+        else:
+            lag_corr = None
+        lag_ok = bool(lag_corr is not None and abs(lag_corr) < 0.30)
+        runs = self.runs_test(values)
+        return {
+            "normality": normality,
+            "residual_ok": residual_ok,
+            "residual_comment": "No clear systematic trend detected." if residual_ok else "Possible systematic trend detected.",
+            "lag_corr": lag_corr,
+            "lag_ok": lag_ok,
+            "lag_comment": "No strong evidence of autocorrelation." if lag_ok else "Possible autocorrelation or trend.",
+            "runs": runs,
+        }
+
+    def redraw_diagnostics_charts(self):
+        if self.last_model is None or self.last_measure_col is None:
+            return
+        try:
+            model = self.model_for_scope(self.last_model, self.use_recent_diagnostics.get())
+            stats = self.calculate_stats(model[self.last_measure_col], self.last_new_value, self.last_ewma_lambda)
+        except ValueError as exc:
+            messagebox.showerror("Error", str(exc))
+            return
+        self.draw_diagnostics_charts(model, self.last_measure_col, stats)
+
+    def draw_diagnostics_charts(self, model, measure_col, stats):
+        self.clear_frame(self.diagnostics_plot_frame)
+        self.diagnostics_canvas = None
+
+        values = pd.to_numeric(model[measure_col], errors="coerce").dropna().astype(float)
+        diagnostics = self.diagnostics_results(values)
+        residuals = values - values.mean()
+        sigma = stats["sigma_imr"] if stats["sigma_imr"] else float(values.std(ddof=1)) if len(values) > 1 else 0.0
+
+        fig, axes = plt.subplots(2, 2, figsize=(11.4, 6.8), dpi=100)
+        ax_hist, ax_qq, ax_resid, ax_lag = axes.ravel()
+
+        if len(values):
+            ax_hist.hist(values, bins="auto", density=True, color="#90caf9", edgecolor="#1565c0", alpha=0.75)
+            if sigma:
+                x_values = np.linspace(values.min(), values.max(), 300)
+                y_values = scipy_stats.norm.pdf(x_values, loc=values.mean(), scale=sigma)
+                ax_hist.plot(x_values, y_values, color="#c62828", linewidth=1.8, label="Normal fit")
+                ax_hist.legend()
+            ax_hist.set_title("Histogram with normal fit")
+            ax_hist.set_xlabel(measure_col)
+            ax_hist.set_ylabel("Density")
+            ax_hist.grid(True, alpha=0.25)
+
+        if len(values) >= 3:
+            scipy_stats.probplot(values, dist="norm", plot=ax_qq)
+            ax_qq.get_lines()[0].set_markerfacecolor("#1565c0")
+            ax_qq.get_lines()[0].set_markeredgecolor("#1565c0")
+            ax_qq.get_lines()[0].set_alpha(0.75)
+            ax_qq.get_lines()[1].set_color("#c62828")
+            ax_qq.get_lines()[1].set_linewidth(1.7)
+            ax_qq.set_title("Normal Q-Q plot")
+            ax_qq.set_xlabel("Theoretical quantiles")
+            ax_qq.set_ylabel("Ordered values")
+            ax_qq.grid(True, alpha=0.25)
+        else:
+            ax_qq.text(0.5, 0.5, "At least 3 values are required.", ha="center", va="center")
+            ax_qq.set_title("Normal Q-Q plot")
+
+        x_values, has_dates = self.chart_x_values(model.loc[values.index])
+        ax_resid.axhline(0, color="#111111", linewidth=1)
+        ax_resid.scatter(x_values, residuals, color="#1565c0", s=22, alpha=0.8)
+        ax_resid.set_title("Residuals vs sequence")
+        ax_resid.set_ylabel("Residual")
+        if has_dates:
+            ax_resid.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m/%Y"))
+            for tick in ax_resid.get_xticklabels():
+                tick.set_rotation(30)
+                tick.set_ha("right")
+        else:
+            ax_resid.set_xlabel("Measurement sequence")
+        ax_resid.grid(True, alpha=0.25)
+
+        if len(values) >= 2:
+            previous_values = values.iloc[:-1]
+            current_values = values.iloc[1:]
+            ax_lag.scatter(previous_values, current_values, color="#00897b", s=24, alpha=0.8)
+            ax_lag.set_xlabel("Previous measurement")
+            ax_lag.set_ylabel("Current measurement")
+            ax_lag.set_title("Lag plot for independence")
+            ax_lag.grid(True, alpha=0.25)
+        else:
+            ax_lag.text(0.5, 0.5, "At least 2 values are required.", ha="center", va="center")
+            ax_lag.set_title("Lag plot for independence")
+
+        fig.tight_layout()
+        self.diagnostics_canvas = FigureCanvasTkAgg(fig, master=self.diagnostics_plot_frame)
+        self.diagnostics_canvas.draw()
+        self.diagnostics_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        normality = diagnostics["normality"]
+        normality_decision = self.normality_decision(normality)
+        normality_status = normality_decision["status"]
+        residual_status = "[OK]" if diagnostics["residual_ok"] else "[X]"
+        lag_status = "[OK]" if diagnostics["lag_ok"] else "[X]"
+        runs_status = "[OK]" if diagnostics["runs"]["ok"] else "[X]"
+        lag_text = fmt(diagnostics["lag_corr"], 4) if diagnostics["lag_corr"] is not None else "-"
+        runs_p = fmt(diagnostics["runs"]["p_value"], 5) if diagnostics["runs"]["p_value"] is not None else "-"
+        normality_p = fmt(normality["p_value"], 5) if normality["p_value"] is not None else "-"
+        summary = (
+            f"Assumptions & Diagnostics\n\n"
+            f"Normality check: {normality_status}\n"
+            f"Test: {normality['test_name']}\n"
+            f"p-value: {normality_p}\n"
+            f"{normality_decision['summary_text']}\n\n"
+            f"Deviation pattern: {residual_status}\n"
+            f"{diagnostics['residual_comment']}\n\n"
+            f"Independence check: {lag_status}\n"
+            f"Lag-1 correlation: {lag_text}\n"
+            f"{diagnostics['lag_comment']}\n\n"
+            f"Runs test: {runs_status}\n"
+            f"p-value: {runs_p}\n"
+            f"{diagnostics['runs']['comment']}\n\n"
+            f"Interpretation:\n"
+            f"Capability results should be interpreted with caution when normality or independence assumptions are not supported."
+        )
+        self.lbl_diagnostics_summary.config(text=summary)
 
     def draw_i_chart(self, model, search_col, measure_col, code, new_value, stats):
         self.clear_frame(self.tab_i_chart)
@@ -1019,28 +1300,29 @@ class QualityControlApp:
 
         fig, axes = plt.subplots(1, 2, figsize=(12.5, 5.8), dpi=100)
         ax_bar, ax_box = axes
+        group_col = self.cmb_boxplot_group.get()
 
-        if "Material_Type" in model.columns:
-            material_means = (
-                model.groupby("Material_Type")[measure_col]
+        if group_col in model.columns:
+            group_means = (
+                model.groupby(group_col)[measure_col]
                 .mean()
                 .sort_values(ascending=False)
                 .dropna()
             )
-            if not material_means.empty:
+            if not group_means.empty:
                 bars = ax_bar.bar(
-                    material_means.index.astype(str),
-                    material_means.values,
+                    group_means.index.astype(str),
+                    group_means.values,
                     color="#0b2d5b",
                     edgecolor="#061426",
                     linewidth=1.4,
                     alpha=0.92,
                 )
-                ax_bar.set_title("Mean value by Material_Type")
+                ax_bar.set_title(f"Mean value by {group_col}")
                 ax_bar.set_ylabel(f"Mean {measure_col}")
                 ax_bar.tick_params(axis="x", rotation=35)
-                y_offset = max(material_means.values) * 0.005 if len(material_means.values) else 0
-                for bar, value in zip(bars, material_means.values):
+                y_offset = max(group_means.values) * 0.005 if len(group_means.values) else 0
+                for bar, value in zip(bars, group_means.values):
                     ax_bar.text(
                         bar.get_x() + bar.get_width() / 2,
                         bar.get_height() + y_offset,
@@ -1054,12 +1336,11 @@ class QualityControlApp:
                 for tick in ax_bar.get_xticklabels():
                     tick.set_ha("right")
             else:
-                ax_bar.text(0.5, 0.5, "No Material_Type values available.", ha="center", va="center")
+                ax_bar.text(0.5, 0.5, f"No values available for {group_col}.", ha="center", va="center")
         else:
-            ax_bar.text(0.5, 0.5, "Material_Type column was not found.", ha="center", va="center")
+            ax_bar.text(0.5, 0.5, f"{group_col} column was not found.", ha="center", va="center")
         ax_bar.grid(True, axis="y", alpha=0.25)
 
-        group_col = self.cmb_boxplot_group.get()
         if group_col in model.columns:
             grouped = []
             labels = []
@@ -1110,6 +1391,7 @@ class QualityControlApp:
 
         values = model[measure_col].astype(float)
         capability = self.capability_and_hypothesis(values, stats, lsl, usl, self.last_new_value)
+        normality = self.normality_test(values)
         mean = capability["historical_mean"]
         sigma = capability["sigma_cap"] or capability["sample_std"]
 
@@ -1183,7 +1465,20 @@ class QualityControlApp:
         ax.set_ylabel("Density")
         ax.grid(True, alpha=0.3)
         ax.legend(loc="upper left", bbox_to_anchor=(1.01, 1))
-        fig.tight_layout()
+
+        normality_decision = self.normality_decision(normality)
+        fig.text(
+            0.5,
+            0.01,
+            normality_decision["curve_text"],
+            ha="center",
+            va="bottom",
+            color=normality_decision["color"],
+            fontsize=10,
+            fontweight="bold",
+        )
+
+        fig.tight_layout(rect=(0, 0.10, 1, 1))
 
         self.normal_canvas = FigureCanvasTkAgg(fig, master=self.normal_plot_frame)
         self.normal_canvas.draw()
@@ -1208,14 +1503,14 @@ class QualityControlApp:
             if capability["sigma_ci_low"] is not None
             else "-"
         )
+        normality_p = fmt(normality["p_value"], 5) if normality["p_value"] is not None else "-"
+        normality_note = f"\n{normality['note']}" if normality["note"] else ""
+        normality_decision = self.normality_decision(normality)
         normal_text = (
             f"Current process comparison\n"
             f"Production mean             : {capability['historical_mean']:.2f}\n"
             f"Current mean value          : {capability['current_mean']:.2f}\n"
             f"Current-production diff.    : {capability['current_mean'] - capability['historical_mean']:.2f}\n\n"
-            f"Specification limits\n"
-            f"LSL                         : {lsl:.2f}\n"
-            f"USL                         : {usl:.2f}\n\n"
             f"Current process indices\n"
             f"Cp                          : {fmt(capability['cp'])}\n"
             f"Cpk                         : {fmt(capability['cpk'])}\n"
@@ -1224,7 +1519,13 @@ class QualityControlApp:
             f"Standard deviations\n"
             f"Sample s                    : {capability['sample_std']:.2f}\n"
             f"I-MR sigma                  : {capability['sigma_cap']:.2f}\n"
-            f"95% sigma CI with chi-square: {chi_text}"
+            f"95% sigma CI with chi-square: {chi_text}\n\n"
+            f"Normality test\n"
+            f"Test                        : {normality['test_name']}\n"
+            f"N tested                    : {normality['n_tested']}\n"
+            f"p-value                     : {normality_p}"
+            f"{normality_note}"
+            f"\n{normality_decision['summary_text']}"
         )
         self.lbl_normal_stats.config(text=normal_text)
 
@@ -1233,7 +1534,6 @@ class QualityControlApp:
             f"LSL                         : {lsl:.2f}\n"
             f"Current mean                : {capability['current_mean']:.2f}\n"
             f"Difference from LSL         : {capability['current_mean'] - lsl:.2f}\n"
-            f"z-margin                    : {fmt(safety['z_margin'], 4)}\n"
             f"safety p-score              : {fmt(safety['p_safe'], 5)}\n"
             f"safety ratio                : {fmt(safety['safety_ratio'], 4)}\n"
             f"Zone                        : {safety['zone']}\n"
@@ -1246,7 +1546,6 @@ class QualityControlApp:
             f"Historical min              : {values.min():.2f}\n"
             f"Current mean                : {capability['current_mean']:.2f}\n"
             f"Difference from min         : {capability['current_mean'] - values.min():.2f}\n"
-            f"z-margin min                : {fmt(min_safety['z_margin'], 4)}\n"
             f"p-min score                 : {fmt(min_safety['p_safe'], 5)}\n"
             f"min ratio                   : {fmt(min_safety['safety_ratio'], 4)}\n"
             f"Zone                        : {min_safety['zone']}\n"
