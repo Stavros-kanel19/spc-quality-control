@@ -93,19 +93,23 @@ Users can manually adjust LSL and USL according to the actual product specificat
 
 ### I Chart
 
-![I Chart](images/Git_SPC1.png)
+![I Chart](images/images/Git_SPC1.png)
 
 ### MR & EWMA Monitoring
 
-![MR & EWMA](images/Git_SPC2.png)
+![MR & EWMA](images/images/Git_SPC2.png)
 
 ### Material Analysis
 
-![Material Analysis](images/Git_SPC3.png)
+![Material Analysis](images/images/Git_SPC3.png)
 
 ### Process Capability Analysis
 
-![Process Capability](images/Git_SPC4.png)
+![Process Capability](images/images/Git_SPC4.png)
+
+### Assumptions & Diagnostics
+
+![Assumptions & Diagnostics](images/images/Git_SPC5.png)
 
 ## Development Note
 
